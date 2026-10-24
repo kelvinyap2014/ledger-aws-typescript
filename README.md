@@ -114,21 +114,151 @@ INSERT INTO ledger_entries (id, transaction_reference, account_id, entry_type, a
 
 ## 4. Application Implementation Details
 
-### 4.1 Core Transfer Service (TransferService.ts)
+### 4.1 Core Transfer Service (transfer.service.ts)
 
 ```typescript
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { Account } from '../entity/account.entity';
+import { LedgerEntry } from '../entity/ledger-entry.entity';
+import { IdempotencyKey } from '../entity/idempotency-key.entity';
+import { randomUUID } from 'crypto';
+
+@Injectable()
+export class TransferService {
+  private readonly logger = new Logger(TransferService.name);
+
+  constructor(private readonly dataSource: DataSource) {}
+
+  async executeTransfer(
+    idempotencyKeyStr: string | undefined,
+    sourceAccountId: string,
+    destinationAccountId: string,
+    amount: string,
+    currency: string,
+    description: string,
+  ): Promise<string> {
+    this.logger.log(`Begin transfer from ${sourceAccountId} to ${destinationAccountId} of amount ${amount} ${currency}`);
+
+    if (idempotencyKeyStr && idempotencyKeyStr.trim() !== '') {
+      const existingKey = await this.dataSource.getRepository(IdempotencyKey).findOne({
+        where: { idempotencyKey: idempotencyKeyStr },
+      });
+      if (existingKey) {
+        return existingKey.responseBody;
+      }
+    }
+
+    if (Number(amount) <= 0) {
+      throw new BadRequestException('Transfer amount must be strictly positive');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const sourceAccount = await queryRunner.manager.findOne(Account, {
+        where: { id: sourceAccountId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!sourceAccount) {
+        throw new BadRequestException(`Source account not found: ${sourceAccountId}`);
+      }
+
+      const destAccount = await queryRunner.manager.findOne(Account, {
+        where: { id: destinationAccountId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!destAccount) {
+        throw new BadRequestException(`Destination account not found: ${destinationAccountId}`);
+      }
+
+      if (Number(sourceAccount.balance) < Number(amount)) {
+        throw new BadRequestException('Insufficient funds in source account');
+      }
+
+      const txRef = 'TX-' + randomUUID().substring(0, 8).toUpperCase();
+
+      const debitEntry = LedgerEntry.createDebit(txRef, sourceAccountId, amount, currency, description);
+      const creditEntry = LedgerEntry.createCredit(txRef, destinationAccountId, amount, currency, description);
+
+      await queryRunner.manager.save(LedgerEntry, [debitEntry, creditEntry]);
+
+      sourceAccount.balance = (Number(sourceAccount.balance) - Number(amount)).toFixed(4);
+      destAccount.balance = (Number(destAccount.balance) + Number(amount)).toFixed(4);
+
+      const now = new Date();
+      sourceAccount.updatedAt = now;
+      destAccount.updatedAt = now;
+
+      await queryRunner.manager.save(Account, [sourceAccount, destAccount]);
+
+      if (idempotencyKeyStr && idempotencyKeyStr.trim() !== '') {
+        const keyRecord = queryRunner.manager.create(IdempotencyKey, {
+          idempotencyKey: idempotencyKeyStr,
+          requestHash: sourceAccountId + destinationAccountId + amount,
+          responseBody: txRef,
+          createdAt: new Date(),
+        });
+        await queryRunner.manager.save(IdempotencyKey, keyRecord);
+      }
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(
+        `End transfer from ${sourceAccountId} to ${destinationAccountId} of amount ${amount} ${currency}, transaction reference: ${txRef}`
+      );
+
+      return txRef;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+}
+
 ```
 
-### 4.2 Unit Test (TransferControllerTest.ts)
+### 4.2 Unit Test (app.controller.spec.ts)
 
 ```typescript
+import { Test, TestingModule } from '@nestjs/testing';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
+describe('AppController', () => {
+  let appController: AppController;
+
+  beforeEach(async () => {
+    const app: TestingModule = await Test.createTestingModule({
+      controllers: [AppController],
+      providers: [AppService],
+    }).compile();
+
+    appController = app.get<AppController>(AppController);
+  });
+
+  describe('health', () => {
+    it('should return health status UP with timestamp', () => {
+      const result = appController.getHealth();
+      expect(result.status).toBe('UP');
+      expect(result.timestamp).toBeDefined();
+    });
+  });
+});
+
 ```
 
 ## 5. Deployment & Operational Runbook
 
 - Build Container: Package the NestJS application into a multi-stage Docker image and push to AWS ECR.
 
-- Database Migration: Database migrations run automatically on deployment against RDS MySQL.
+- Database Migration: Database migrations run on deployment against RDS MySQL.
 
 - AWS Fargate Deployment: Deploy ECS Task Definition behind an Application Load Balancer (ALB) with secure private VPC subnets.
 
@@ -215,7 +345,7 @@ terraform apply -var-file="terraform-dev.tfvars" -target=aws_ecr_repository.ledg
 # Authenticate your local Docker client to your AWS ECR registry
 aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <aws-account-id>.dkr.ecr.<region>.amazonaws.com
 
-# Build your Docker image from your PHP project directory
+# Build your Docker image from your project directory
 cd apps/ledger-js
 docker build -t ledger-stream-js .
 
@@ -228,13 +358,33 @@ docker push <aws-account-id>.dkr.ecr.<region>.amazonaws.com/ledger-stream-js:lat
 aws ecs update-service --cluster ledger-stream-cluster-dev --service ledger-stream-service-dev --force-new-deployment --region ap-southeast-2
 
 aws logs tail /ecs/ledger-stream-dev --follow --region ap-southeast-2
+
+# Data migration
+aws ecs run-task \
+  --cluster your-ecs-cluster-name \
+  --task-definition your-task-def-family \
+  --launch-type FARGATE \
+  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxx],securityGroups=[sg-xxxx],assignPublicIp=ENABLED}" \
+  --overrides '{
+    "containerOverrides": [
+      {
+        "name": "ledger-js",
+        "command": ["npx", "typeorm", "migration:run", "-d", "dist/data-source.js"]
+      }
+    ]
+  }'
 ```
 
 #### Test Docker Image Locally
 ```bash
 docker run --rm \
   -p 8080:8080 \
-  -e DATABASE_URL="mysql://root:rootpassword@172.17.0.1:3306/ledger_db?serverVersion=8.0&charset=utf8mb4" \
+  -e PORT=8080 \
+  -e DB_HOST=172.17.0.1 \
+  -e DB_PORT=3306 \
+  -e DB_USER=root \
+  -e DB_PASSWORD=rootpassword \
+  -e DB_NAME=ledger_db \
   -e SQS_SETTLEMENT_QUEUE_URL=https://sqs.ap-southeast-2.amazonaws.com/<aws-account-id>/ledger-settlement-queue-dev \
   -e AWS_REGION=ap-southeast-2 \
   -e AWS_S3_AUDIT_BUCKET_NAME=ledger-audit-statements-dev \
@@ -248,7 +398,7 @@ docker run --rm \
 # at root folder
 docker compose up --build
 # use port 8080
-curl -X GET "http://localhost:8080/health"
+curl -X GET "http://localhost:8081/health"
 
 # This ensures MySQL re-initializes fresh every time
 docker compose down -v
@@ -261,7 +411,7 @@ docker compose restart
 
 ```bash
 # at root folder, start MySQL server only
-docker compose up mysql
+docker compose up mysql-js mysql-health-check-js
 
 cd apps/ledger-js
 
@@ -292,6 +442,10 @@ npx @nestjs/cli new . --package-manager npm --skip-git
 
 # 5. Install TypeORM & MySQL Driver Packages
 npm install typeorm @nestjs/typeorm mysql2
+
+# Data migration
+npm run migration:generate -- src/migration/InitialSchema
+npm run migration:run
 ```
 
 ### Quick Start: Build & Package Lambda Functions (`apps/lambda/settlement-handler`)
