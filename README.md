@@ -270,11 +270,11 @@ npm init -y
 # 3. Install Core NestJS Dependencies & HTTP Platform
 npm install @nestjs/common @nestjs/core @nestjs/platform-express reflect-metadata rxjs
 
-# 4. Install TypeORM & MySQL Driver Packages
-npm install typeorm @nestjs/typeorm mysql2
+# 4. Use NestJS CLI to scaffold the standard structure, tsconfig.json, and nest-cli.json automatically
+npx @nestjs/cli new . --package-manager npm --skip-git
 
-# 5. Install Development Dependencies (TypeScript, CLI, types)
-npm install --save-dev typescript @types/node @nestjs/cli @types/express ts-node
+# 5. Install TypeORM & MySQL Driver Packages
+npm install typeorm @nestjs/typeorm mysql2
 ```
 
 ### Quick Start: Build & Package Lambda Functions (`apps/lambda/settlement-handler`)
