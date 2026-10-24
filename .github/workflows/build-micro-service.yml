@@ -1,0 +1,48 @@
+name: Build TypeScript Microservice Code
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/ledger-js/**'
+      - '.github/workflows/build-micro-service.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'app/ledger-js/**'
+      - '.github/workflows/build-micro-service.yml'
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/ledger-js
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: apps/ledger-js/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Lint Code
+        run: npm run lint
+
+      - name: Run Unit Tests
+        run: npm test
+
+      - name: Run E2E Tests
+        run: npm run test:e2e
+
+      - name: Build Application
+        run: npm run build
