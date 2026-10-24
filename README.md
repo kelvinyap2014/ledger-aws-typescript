@@ -243,9 +243,26 @@ docker run --rm \
 
 ## TypeScript, NestJS, Node.js Development
 
+### Quick Start: Docker Development environment for Ledger Microservice
+```bash
+# at root folder
+docker compose up --build
+# use port 8080
+curl -X GET "http://localhost:8080/health"
+
+# This ensures MySQL re-initializes fresh every time
+docker compose down -v
+
+# Faster, but reuses the old MySQL volume
+docker compose restart
+```
+
 ### Quick Start: Ledger Microservice (`apps/ledger-js`)
 
 ```bash
+# at root folder, start MySQL server only
+docker compose up mysql
+
 cd apps/ledger-js
 
 # 1. Install dependencies
@@ -313,20 +330,20 @@ npm install --save-dev typescript @types/node @types/aws-lambda esbuild @nestjs/
 # at root folder
 docker compose up --build
 
-curl -X GET "http://localhost:8080/health"
+curl -X GET "http://localhost:3000/health"
 ```
 
-The API will be available at `http://localhost:8080/api`.
+The API will be available at `http://localhost:3000/api`.
 
 ### 2. Get Account Statement URL Request
 ```bash
-curl -X GET "http://localhost:8080/api/v1/accounts/acc-001-nzd/statement/url" \
+curl -X GET "http://localhost:3000/api/v1/accounts/acc-001-nzd/statement/url" \
      -H "Accept: application/json"
 ```
 
 ### 3. Execute a Transfer Request
 ```bash
-curl -X POST http://localhost:8080/api/v1/transfers \
+curl -X POST http://localhost:3000/api/v1/transfers \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
   -d '{
@@ -349,7 +366,7 @@ curl -X POST http://localhost:8080/api/v1/transfers \
 
 ### 4. Verify Idempotency — Resubmit with Same Key
 ```bash
-curl -X POST http://localhost:8080/api/v1/transfers \
+curl -X POST http://localhost:3000/api/v1/transfers \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
   -d '{
@@ -364,7 +381,7 @@ Should return the **same transaction reference** and HTTP 201 without creating d
 
 ### 5. Test Insufficient Funds Scenario
 ```bash
-curl -X POST http://localhost:8080/api/v1/transfers \
+curl -X POST http://localhost:3000/api/v1/transfers \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{
