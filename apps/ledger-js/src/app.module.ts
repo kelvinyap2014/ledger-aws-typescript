@@ -18,6 +18,7 @@ import { IdempotencyRepository } from './repository/idempotency.repository';
 // Services
 import { TransferService } from './service/transfer.service';
 import { StatementService } from './service/statement.service';
+import { SqsSettlementPublisher } from './service/sqs-settlement-publisher.service';
 
 // Controllers
 import { TransferController } from './controller/transfer.controller';
@@ -50,6 +51,7 @@ import { StatementController } from './controller/statement.controller';
     AppService,
     TransferService,
     StatementService,
+    SqsSettlementPublisher,
     AccountRepository,
     LedgerRepository,
     IdempotencyRepository,

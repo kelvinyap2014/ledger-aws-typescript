@@ -4,12 +4,16 @@ import { Account } from '../entity/account.entity';
 import { LedgerEntry } from '../entity/ledger-entry.entity';
 import { IdempotencyKey } from '../entity/idempotency-key.entity';
 import { randomUUID } from 'crypto';
+import { SqsSettlementPublisher } from './sqs-settlement-publisher.service';
 
 @Injectable()
 export class TransferService {
   private readonly logger = new Logger(TransferService.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly sqsPublisher: SqsSettlementPublisher,
+  ) {}
 
   async executeTransfer(
     idempotencyKeyStr: string | undefined,
@@ -88,6 +92,16 @@ export class TransferService {
       }
 
       await queryRunner.commitTransaction();
+
+      // Emit asynchronous settlement event to SQS (Non-blocking)
+      await this.sqsPublisher.publish({
+        transactionReference: txRef,
+        sourceAccountId,
+        destinationAccountId,
+        amount,
+        currency,
+        timestamp: new Date().toISOString(),
+      });
 
       this.logger.log(
         `End transfer from ${sourceAccountId} to ${destinationAccountId} of amount ${amount} ${currency}, transaction reference: ${txRef}`
