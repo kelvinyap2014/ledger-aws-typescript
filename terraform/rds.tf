@@ -80,6 +80,11 @@ output "rds_endpoint" {
   description = "Database connection endpoint"
 }
 
+output "rds_address" {
+  value       = aws_db_instance.ledgerdb.address
+  description = "Database connection address"
+}
+
 output "db_secret_arn" {
   value       = aws_db_instance.ledgerdb.master_user_secret[0].secret_arn
   description = "AWS Secrets Manager ARN containing the auto-generated database password"

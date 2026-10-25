@@ -153,5 +153,6 @@ vite.config.ts.timestamp-*
 .terraform*
 terraform.tfstate
 terraform.tfstate.backup
+terraform.*.backup
 
 *.zip

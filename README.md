@@ -358,21 +358,6 @@ docker push <aws-account-id>.dkr.ecr.<region>.amazonaws.com/ledger-stream-js:lat
 aws ecs update-service --cluster ledger-stream-cluster-dev --service ledger-stream-service-dev --force-new-deployment --region ap-southeast-2
 
 aws logs tail /ecs/ledger-stream-dev --follow --region ap-southeast-2
-
-# Data migration
-aws ecs run-task \
-  --cluster your-ecs-cluster-name \
-  --task-definition your-task-def-family \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxx],securityGroups=[sg-xxxx],assignPublicIp=ENABLED}" \
-  --overrides '{
-    "containerOverrides": [
-      {
-        "name": "ledger-js",
-        "command": ["npx", "typeorm", "migration:run", "-d", "dist/data-source.js"]
-      }
-    ]
-  }'
 ```
 
 #### Test Docker Image Locally
@@ -397,7 +382,7 @@ docker run --rm \
 ```bash
 # at root folder
 docker compose up --build
-# use port 8080
+# use port 8081
 curl -X GET "http://localhost:8081/health"
 
 # This ensures MySQL re-initializes fresh every time
