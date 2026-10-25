@@ -405,6 +405,7 @@ npm install
 
 # 2. Run NestJS application locally
 npm run start:dev
+curl -X GET "http://localhost:3000/health"
 
 # 3. Run unit tests
 npm run test
@@ -469,20 +470,20 @@ npm install --save-dev typescript @types/node @types/aws-lambda esbuild @nestjs/
 # at root folder
 docker compose up --build
 
-curl -X GET "http://localhost:3000/health"
+curl -X GET "http://localhost:8081/health"
 ```
 
-The API will be available at `http://localhost:3000/api`.
+The API will be available at `http://localhost:8081/api`.
 
 ### 2. Get Account Statement URL Request
 ```bash
-curl -X GET "http://localhost:3000/api/v1/accounts/acc-001-nzd/statement/url" \
+curl -X GET "http://localhost:8081/api/v1/accounts/acc-001-nzd/statement/url" \
      -H "Accept: application/json"
 ```
 
 ### 3. Execute a Transfer Request
 ```bash
-curl -X POST http://localhost:3000/api/v1/transfers \
+curl -X POST http://localhost:8081/api/v1/transfers \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
   -d '{
@@ -505,7 +506,7 @@ curl -X POST http://localhost:3000/api/v1/transfers \
 
 ### 4. Verify Idempotency — Resubmit with Same Key
 ```bash
-curl -X POST http://localhost:3000/api/v1/transfers \
+curl -X POST http://localhost:8081/api/v1/transfers \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
   -d '{
@@ -520,7 +521,7 @@ Should return the **same transaction reference** and HTTP 201 without creating d
 
 ### 5. Test Insufficient Funds Scenario
 ```bash
-curl -X POST http://localhost:3000/api/v1/transfers \
+curl -X POST http://localhost:8081/api/v1/transfers \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{

@@ -17,9 +17,11 @@ import { IdempotencyRepository } from './repository/idempotency.repository';
 
 // Services
 import { TransferService } from './service/transfer.service';
+import { StatementService } from './service/statement.service';
 
 // Controllers
 import { TransferController } from './controller/transfer.controller';
+import { StatementController } from './controller/statement.controller';
 
 @Module({
   imports: [
@@ -43,10 +45,11 @@ import { TransferController } from './controller/transfer.controller';
     // Registers entities for feature injection
     TypeOrmModule.forFeature([Account, LedgerEntry, IdempotencyKey]),
   ],
-  controllers: [AppController, TransferController],
+  controllers: [AppController, TransferController, StatementController],
   providers: [
     AppService,
     TransferService,
+    StatementService,
     AccountRepository,
     LedgerRepository,
     IdempotencyRepository,
