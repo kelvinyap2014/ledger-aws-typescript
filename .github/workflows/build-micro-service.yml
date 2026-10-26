@@ -5,13 +5,13 @@ on:
     branches:
       - main
     paths:
-      - 'app/ledger-js/**'
+      - 'apps/ledger-js/**'
       - '.github/workflows/build-micro-service.yml'
   pull_request:
     branches:
       - main
     paths:
-      - 'app/ledger-js/**'
+      - 'apps/ledger-js/**'
       - '.github/workflows/build-micro-service.yml'
 
 jobs:
