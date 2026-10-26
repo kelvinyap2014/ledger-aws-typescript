@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { DataSource, Repository, QueryRunner } from 'typeorm';
 import { TransferService } from './transfer.service';
+import { SqsSettlementPublisher } from './sqs-settlement-publisher.service';
 import { Account } from '../entity/account.entity';
 import { LedgerEntry, EntryType } from '../entity/ledger-entry.entity';
 import { IdempotencyKey } from '../entity/idempotency-key.entity';
@@ -43,12 +44,20 @@ describe('TransferService', () => {
       createQueryRunner: jest.fn().mockReturnValue(queryRunner),
     } as unknown as DataSource;
 
+    const sqsPublisher = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    } as unknown as SqsSettlementPublisher;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TransferService,
         {
           provide: DataSource,
           useValue: dataSource,
+        },
+        {
+          provide: SqsSettlementPublisher,
+          useValue: sqsPublisher,
         },
       ],
     }).compile();
